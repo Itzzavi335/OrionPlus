@@ -50,14 +50,16 @@ local Window = OrionPlus:MakeWindow({
     CloseCallback = function()
         print("UI closed")
     end,
+    KeySystem      = true,
     Keys           = {
-        "USER-KEY-ALPHA-001",
-        "USER-KEY-BETA-002",
-        "ADMIN-OVERRIDE-9999",
+        "Hi",
+        "Avi",
+        "Avi1",
     },
     KeyTitle       = "Authentication",
     KeyDescription = "Enter your key below.",
     KeyNote        = "Keys at discord.gg/xyz",
+    GetKeyButton   = "https://discord.gg/xyz",
 })
 
 -- After this line, the main UI builds.  Use OrionPlus.EnteredKey to tell
