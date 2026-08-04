@@ -494,6 +494,7 @@ end
 -- Sets OrionPlus.EnteredKey on success.
 -- ════════════════════════════════════════════════════════════
 local function ShowKeyPrompt(KeyConfig)
+	-- KeyConfig.GetKeyUrl = optional URL for the "Get Key" button
 	local Resolved  = false
 	local FoundKey  = nil
 
@@ -632,6 +633,46 @@ local function ShowKeyPrompt(KeyConfig)
 	}, {
 		Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
 	})
+
+	-- ── Get Key button (optional) ─────────────────────────────
+	if KeyConfig.GetKeyUrl then
+		local GetKeyBtn = Create("TextButton", {
+			Parent           = Card,
+			Size             = UDim2.new(1, -40, 0, 38),
+			Position         = UDim2.new(0, 20, 0, 186),
+			BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+			BorderSizePixel  = 0,
+			Text             = "🔑  Get Key",
+			TextColor3       = Color3.fromRGB(200, 200, 200),
+			Font             = Enum.Font.GothamBold,
+			TextSize         = 13,
+			AutoButtonColor  = false,
+			ZIndex           = 52,
+		}, {
+			Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Create("UIStroke",  { Color = Color3.fromRGB(70, 70, 70), Thickness = 1 }),
+		})
+		-- Shift submit button down to make room
+		SubmitBtn.Position = UDim2.new(0, 20, 0, 232)
+		-- Expand card height
+		Card.Size = UDim2.new(0, 400, 0, 292)
+
+		GetKeyBtn.MouseEnter:Connect(function()
+			TweenService:Create(GetKeyBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}):Play()
+		end)
+		GetKeyBtn.MouseLeave:Connect(function()
+			TweenService:Create(GetKeyBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = Color3.fromRGB(35, 35, 35)}):Play()
+		end)
+		GetKeyBtn.MouseButton1Up:Connect(function()
+			setclipboard(KeyConfig.GetKeyUrl)
+			GetKeyBtn.Text = "✓  Link Copied!"
+			task.delay(2, function()
+				if GetKeyBtn and GetKeyBtn.Parent then
+					GetKeyBtn.Text = "🔑  Get Key"
+				end
+			end)
+		end)
+	end
 
 	-- ── Note (optional bottom text) ───────────────────────────
 	if KeyConfig.Note then
@@ -917,10 +958,12 @@ function OrionPlus:MakeWindow(WindowConfig)
 	WindowConfig.Icon             = WindowConfig.Icon             or "rbxassetid://8834748103"
 	WindowConfig.IntroIcon        = WindowConfig.IntroIcon        or "rbxassetid://8834748103"
 	-- Key system
-	WindowConfig.Keys             = WindowConfig.Keys             or nil   -- table of valid key strings, or nil to disable
+	if WindowConfig.KeySystem == nil then WindowConfig.KeySystem = false end
+	WindowConfig.Keys             = WindowConfig.Keys             or nil
 	WindowConfig.KeyTitle         = WindowConfig.KeyTitle         or "Authentication Required"
-	WindowConfig.KeyDescription   = WindowConfig.KeyDescription   or nil   -- auto-generated if nil
-	WindowConfig.KeyNote          = WindowConfig.KeyNote          or nil   -- small grey footer note
+	WindowConfig.KeyDescription   = WindowConfig.KeyDescription   or nil
+	WindowConfig.KeyNote          = WindowConfig.KeyNote          or nil
+	WindowConfig.GetKeyButton     = WindowConfig.GetKeyButton     or nil   -- URL string; shows "Get Key" button when set
 	OrionPlus.Folder              = WindowConfig.ConfigFolder
 	OrionPlus.SaveCfg             = WindowConfig.SaveConfig
 
@@ -933,12 +976,13 @@ function OrionPlus:MakeWindow(WindowConfig)
 	-- ── Global key gate ──────────────────────────────────────
 	-- If Keys are configured, block here until the user enters
 	-- a valid one.  Sets OrionPlus.EnteredKey on success.
-	if WindowConfig.Keys and #WindowConfig.Keys > 0 then
+	if WindowConfig.KeySystem and WindowConfig.Keys and #WindowConfig.Keys > 0 then
 		ShowKeyPrompt({
 			Keys        = WindowConfig.Keys,
 			Title       = WindowConfig.KeyTitle,
 			Description = WindowConfig.KeyDescription,
 			Note        = WindowConfig.KeyNote,
+			GetKeyUrl   = WindowConfig.GetKeyButton,
 		})
 	else
 		OrionPlus.Authenticated = true
