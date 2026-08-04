@@ -603,7 +603,7 @@ local function ShowKeyPrompt(KeyConfig)
 		Size                   = UDim2.new(1, -40, 0, 14),
 		Position               = UDim2.new(0, 20, 0, 165),
 		BackgroundTransparency = 1,
-		Text                   = "✕  Invalid key — please try again.",
+		Text                   = "Invalid key — please try again.",
 		TextColor3             = Color3.fromRGB(255, 75, 75),
 		Font                   = Enum.Font.GothamSemibold,
 		TextSize               = 11,
@@ -642,7 +642,7 @@ local function ShowKeyPrompt(KeyConfig)
 			Position         = UDim2.new(0, 20, 0, 186),
 			BackgroundColor3 = Color3.fromRGB(35, 35, 35),
 			BorderSizePixel  = 0,
-			Text             = "🔑  Get Key",
+			Text             = "Get Key",
 			TextColor3       = Color3.fromRGB(200, 200, 200),
 			Font             = Enum.Font.GothamBold,
 			TextSize         = 13,
@@ -650,7 +650,7 @@ local function ShowKeyPrompt(KeyConfig)
 			ZIndex           = 52,
 		}, {
 			Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			Create("UIStroke",  { Color = Color3.fromRGB(70, 70, 70), Thickness = 1 }),
+			Create("UIStroke",  { Color = Color3.fromRGB(70, 70, 70), Thickness = 0 }),
 		})
 		-- Shift submit button down to make room
 		SubmitBtn.Position = UDim2.new(0, 20, 0, 232)
