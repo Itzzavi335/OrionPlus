@@ -1,4 +1,4 @@
-OrionPlus = loadstring(game:HttpGet("YOUR_RAW_SOURCE_URL"))()
+OrionPlus = loadstring(game:HttpGet("https://raw.githubusercontent.com/Itzzavi335/OrionPlus/refs/heads/main/source.luau"))()
 
 -- ════════════════════════════════════════════════════════════
 -- 1. MAKE WINDOW
