@@ -26,7 +26,9 @@ local OrionPlus = {
 	},
 	SelectedTheme = "Default",
 	Folder = nil,
-	SaveCfg = false
+	SaveCfg = false,
+	EnteredKey = nil,     -- stores whichever key the user typed successfully
+	Authenticated = false -- true once global key (if any) is passed
 }
 
 -- Feather Icons https://github.com/evoincorp/lucideblox/tree/master/src/modules/util - Created by 7kayoh
@@ -485,6 +487,416 @@ function OrionPlus:Init()
 	end	
 end	
 
+-- ════════════════════════════════════════════════════════════
+-- Internal: themed key-entry modal
+-- KeyConfig = { Keys={}, Title="", Description="", Note="" }
+-- Blocks (using Heartbeat loop) until a valid key is entered.
+-- Sets OrionPlus.EnteredKey on success.
+-- ════════════════════════════════════════════════════════════
+local function ShowKeyPrompt(KeyConfig)
+	local Resolved  = false
+	local FoundKey  = nil
+
+	-- ── Overlay ──────────────────────────────────────────────
+	local Overlay = Create("Frame", {
+		Parent                 = Orion,
+		Size                   = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3       = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel        = 0,
+		ZIndex                 = 50,
+	})
+
+	-- ── Card ─────────────────────────────────────────────────
+	local Card = Create("Frame", {
+		Parent                 = Overlay,
+		Size                   = UDim2.new(0, 400, 0, 248),
+		AnchorPoint            = Vector2.new(0.5, 0.5),
+		Position               = UDim2.new(0.5, 0, 0.45, 0),  -- starts slightly high; tweens to centre
+		BackgroundColor3       = Color3.fromRGB(22, 22, 22),
+		BorderSizePixel        = 0,
+		ZIndex                 = 51,
+	}, {
+		Create("UICorner", { CornerRadius = UDim.new(0, 12) }),
+		Create("UIStroke",  { Color = Color3.fromRGB(60, 60, 60), Thickness = 1 }),
+	})
+
+	-- ── Lock icon ─────────────────────────────────────────────
+	Create("ImageLabel", {
+		Parent                 = Card,
+		Size                   = UDim2.new(0, 26, 0, 26),
+		AnchorPoint            = Vector2.new(0.5, 0),
+		Position               = UDim2.new(0.5, 0, 0, 20),
+		BackgroundTransparency = 1,
+		Image                  = "rbxassetid://3610239960",
+		ImageColor3            = Color3.fromRGB(200, 200, 200),
+		ZIndex                 = 52,
+	})
+
+	-- ── Title ─────────────────────────────────────────────────
+	Create("TextLabel", {
+		Parent                 = Card,
+		Size                   = UDim2.new(1, -40, 0, 22),
+		Position               = UDim2.new(0, 20, 0, 54),
+		BackgroundTransparency = 1,
+		Text                   = KeyConfig.Title or "Authentication Required",
+		TextColor3             = Color3.fromRGB(240, 240, 240),
+		Font                   = Enum.Font.GothamBlack,
+		TextSize               = 17,
+		TextXAlignment         = Enum.TextXAlignment.Center,
+		ZIndex                 = 52,
+	})
+
+	-- ── Description ───────────────────────────────────────────
+	local keyCount = #KeyConfig.Keys
+	Create("TextLabel", {
+		Parent                 = Card,
+		Size                   = UDim2.new(1, -40, 0, 34),
+		Position               = UDim2.new(0, 20, 0, 80),
+		BackgroundTransparency = 1,
+		Text                   = KeyConfig.Description
+			or ("Enter one of the " .. keyCount .. " accepted key" .. (keyCount ~= 1 and "s" or "") .. " to continue."),
+		TextColor3             = Color3.fromRGB(140, 140, 140),
+		Font                   = Enum.Font.GothamSemibold,
+		TextSize               = 12,
+		TextXAlignment         = Enum.TextXAlignment.Center,
+		TextWrapped            = true,
+		ZIndex                 = 52,
+	})
+
+	-- ── Input container ───────────────────────────────────────
+	local InputStroke = Create("UIStroke", {
+		Color     = Color3.fromRGB(60, 60, 60),
+		Thickness = 1,
+	})
+	local InputContainer = Create("Frame", {
+		Parent           = Card,
+		Size             = UDim2.new(1, -40, 0, 38),
+		Position         = UDim2.new(0, 20, 0, 122),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BorderSizePixel  = 0,
+		ZIndex           = 52,
+	}, {
+		Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		InputStroke,
+	})
+
+	local InputBox = Create("TextBox", {
+		Parent                 = InputContainer,
+		Size                   = UDim2.new(1, -20, 1, 0),
+		Position               = UDim2.new(0, 10, 0, 0),
+		BackgroundTransparency = 1,
+		Text                   = "",
+		PlaceholderText        = "Enter key here...",
+		PlaceholderColor3      = Color3.fromRGB(80, 80, 80),
+		TextColor3             = Color3.fromRGB(240, 240, 240),
+		Font                   = Enum.Font.GothamSemibold,
+		TextSize               = 13,
+		ClearTextOnFocus       = false,
+		ZIndex                 = 53,
+	})
+
+	-- ── Error label ───────────────────────────────────────────
+	local ErrorLabel = Create("TextLabel", {
+		Parent                 = Card,
+		Size                   = UDim2.new(1, -40, 0, 14),
+		Position               = UDim2.new(0, 20, 0, 165),
+		BackgroundTransparency = 1,
+		Text                   = "✕  Invalid key — please try again.",
+		TextColor3             = Color3.fromRGB(255, 75, 75),
+		Font                   = Enum.Font.GothamSemibold,
+		TextSize               = 11,
+		TextXAlignment         = Enum.TextXAlignment.Center,
+		Visible                = false,
+		ZIndex                 = 52,
+	})
+
+	-- ── Submit button ─────────────────────────────────────────
+	local SubmitNormal  = Color3.fromRGB(9, 99, 195)
+	local SubmitHover   = Color3.fromRGB(20, 120, 220)
+	local SubmitSuccess = Color3.fromRGB(0, 160, 80)
+	local SubmitError   = Color3.fromRGB(150, 35, 35)
+
+	local SubmitBtn = Create("TextButton", {
+		Parent           = Card,
+		Size             = UDim2.new(1, -40, 0, 38),
+		Position         = UDim2.new(0, 20, 0, 186),
+		BackgroundColor3 = SubmitNormal,
+		BorderSizePixel  = 0,
+		Text             = "Confirm Key",
+		TextColor3       = Color3.fromRGB(255, 255, 255),
+		Font             = Enum.Font.GothamBold,
+		TextSize         = 13,
+		AutoButtonColor  = false,
+		ZIndex           = 52,
+	}, {
+		Create("UICorner", { CornerRadius = UDim.new(0, 8) }),
+	})
+
+	-- ── Note (optional bottom text) ───────────────────────────
+	if KeyConfig.Note then
+		Create("TextLabel", {
+			Parent                 = Card,
+			Size                   = UDim2.new(1, -40, 0, 12),
+			Position               = UDim2.new(0, 20, 1, -16),
+			BackgroundTransparency = 1,
+			Text                   = KeyConfig.Note,
+			TextColor3             = Color3.fromRGB(80, 80, 80),
+			Font                   = Enum.Font.Gotham,
+			TextSize               = 10,
+			TextXAlignment         = Enum.TextXAlignment.Center,
+			ZIndex                 = 52,
+		})
+	end
+
+	-- ── Shake animation ───────────────────────────────────────
+	local function ShakeInput()
+		local base = InputContainer.Position
+		for i = 1, 6 do
+			TweenService:Create(InputContainer, TweenInfo.new(0.045, Enum.EasingStyle.Linear), {
+				Position = UDim2.new(base.X.Scale, base.X.Offset + ((i % 2 == 0) and 7 or -7), base.Y.Scale, base.Y.Offset)
+			}):Play()
+			task.wait(0.045)
+		end
+		InputContainer.Position = base
+	end
+
+	-- ── Key validation logic ──────────────────────────────────
+	local Busy = false
+	local function TrySubmit()
+		if Busy or Resolved then return end
+		Busy = true
+		local typed = InputBox.Text
+
+		for _, validKey in ipairs(KeyConfig.Keys) do
+			if typed == validKey then
+				-- ✓ Correct
+				ErrorLabel.Visible = false
+				TweenService:Create(InputStroke,  TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Color = Color3.fromRGB(0, 200, 100)}):Play()
+				TweenService:Create(SubmitBtn,    TweenInfo.new(0.3, Enum.EasingStyle.Quint), {BackgroundColor3 = SubmitSuccess}):Play()
+				SubmitBtn.Text = "✓  Access Granted"
+				task.wait(0.55)
+				-- Fade out overlay
+				TweenService:Create(Overlay, TweenInfo.new(0.35, Enum.EasingStyle.Quint), {BackgroundTransparency = 1}):Play()
+				TweenService:Create(Card,    TweenInfo.new(0.35, Enum.EasingStyle.Quint), {BackgroundTransparency = 1, Position = UDim2.new(0.5, 0, 0.44, 0)}):Play()
+				task.wait(0.4)
+				Overlay:Destroy()
+				OrionPlus.EnteredKey    = typed
+				OrionPlus.Authenticated = true
+				FoundKey                = typed
+				Resolved                = true
+				return
+			end
+		end
+
+		-- ✗ Wrong key
+		ErrorLabel.Visible = true
+		TweenService:Create(InputStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {Color = Color3.fromRGB(220, 55, 55)}):Play()
+		TweenService:Create(SubmitBtn,   TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = SubmitError}):Play()
+		spawn(ShakeInput)
+		task.wait(0.9)
+		if not Resolved then
+			TweenService:Create(InputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Color = Color3.fromRGB(60, 60, 60)}):Play()
+			TweenService:Create(SubmitBtn,   TweenInfo.new(0.3, Enum.EasingStyle.Quint), {BackgroundColor3 = SubmitNormal}):Play()
+		end
+		Busy = false
+	end
+
+	SubmitBtn.MouseButton1Up:Connect(function()   spawn(TrySubmit)  end)
+	InputBox.FocusLost:Connect(function(enter)    if enter then spawn(TrySubmit) end  end)
+	SubmitBtn.MouseEnter:Connect(function()
+		if not Resolved then TweenService:Create(SubmitBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = SubmitHover}):Play() end
+	end)
+	SubmitBtn.MouseLeave:Connect(function()
+		if not Resolved then TweenService:Create(SubmitBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = SubmitNormal}):Play() end
+	end)
+
+	-- ── Slide-in animation ────────────────────────────────────
+	TweenService:Create(Card, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.5, 0, 0.5, 0)
+	}):Play()
+
+	-- Block until resolved
+	while not Resolved do
+		RunService.Heartbeat:Wait()
+	end
+
+	return FoundKey
+end
+
+-- ════════════════════════════════════════════════════════════
+-- Internal: compact inline key-lock overlay for a single tab
+-- Shown inside the tab's content area when the tab has Keys
+-- and the user hasn't entered a valid one yet.
+-- ════════════════════════════════════════════════════════════
+local function MakeTabKeyLock(Parent, TabKeys, OnUnlock)
+	local LockFrame = Create("Frame", {
+		Parent                 = Parent,
+		Size                   = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3       = Color3.fromRGB(22, 22, 22),
+		BackgroundTransparency = 0,
+		BorderSizePixel        = 0,
+		ZIndex                 = 10,
+		Name                   = "KeyLockOverlay",
+	}, {
+		Create("UICorner", { CornerRadius = UDim.new(0, 6) }),
+	})
+
+	-- Lock icon
+	Create("ImageLabel", {
+		Parent                 = LockFrame,
+		Size                   = UDim2.new(0, 32, 0, 32),
+		AnchorPoint            = Vector2.new(0.5, 0),
+		Position               = UDim2.new(0.5, 0, 0, 30),
+		BackgroundTransparency = 1,
+		Image                  = "rbxassetid://3610239960",
+		ImageColor3            = Color3.fromRGB(180, 180, 180),
+		ZIndex                 = 11,
+	})
+
+	Create("TextLabel", {
+		Parent                 = LockFrame,
+		Size                   = UDim2.new(1, -40, 0, 20),
+		AnchorPoint            = Vector2.new(0.5, 0),
+		Position               = UDim2.new(0.5, 0, 0, 70),
+		BackgroundTransparency = 1,
+		Text                   = "Key Required",
+		TextColor3             = Color3.fromRGB(220, 220, 220),
+		Font                   = Enum.Font.GothamBlack,
+		TextSize               = 15,
+		TextXAlignment         = Enum.TextXAlignment.Center,
+		ZIndex                 = 11,
+	})
+
+	Create("TextLabel", {
+		Parent                 = LockFrame,
+		Size                   = UDim2.new(1, -60, 0, 28),
+		AnchorPoint            = Vector2.new(0.5, 0),
+		Position               = UDim2.new(0.5, 0, 0, 96),
+		BackgroundTransparency = 1,
+		Text                   = "This tab requires a specific key. Enter it below to unlock.",
+		TextColor3             = Color3.fromRGB(120, 120, 120),
+		Font                   = Enum.Font.GothamSemibold,
+		TextSize               = 11,
+		TextXAlignment         = Enum.TextXAlignment.Center,
+		TextWrapped            = true,
+		ZIndex                 = 11,
+	})
+
+	-- Input
+	local TabInputStroke = Create("UIStroke", { Color = Color3.fromRGB(60, 60, 60), Thickness = 1 })
+	local TabInputCon = Create("Frame", {
+		Parent           = LockFrame,
+		Size             = UDim2.new(0, 240, 0, 34),
+		AnchorPoint      = Vector2.new(0.5, 0),
+		Position         = UDim2.new(0.5, 0, 0, 136),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BorderSizePixel  = 0,
+		ZIndex           = 11,
+	}, {
+		Create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+		TabInputStroke,
+	})
+	local TabInputBox = Create("TextBox", {
+		Parent                 = TabInputCon,
+		Size                   = UDim2.new(1, -16, 1, 0),
+		Position               = UDim2.new(0, 8, 0, 0),
+		BackgroundTransparency = 1,
+		Text                   = "",
+		PlaceholderText        = "Enter tab key...",
+		PlaceholderColor3      = Color3.fromRGB(75, 75, 75),
+		TextColor3             = Color3.fromRGB(240, 240, 240),
+		Font                   = Enum.Font.GothamSemibold,
+		TextSize               = 12,
+		ClearTextOnFocus       = false,
+		ZIndex                 = 12,
+	})
+
+	local TabErrorLabel = Create("TextLabel", {
+		Parent                 = LockFrame,
+		Size                   = UDim2.new(0, 240, 0, 14),
+		AnchorPoint            = Vector2.new(0.5, 0),
+		Position               = UDim2.new(0.5, 0, 0, 175),
+		BackgroundTransparency = 1,
+		Text                   = "✕  Invalid key.",
+		TextColor3             = Color3.fromRGB(255, 75, 75),
+		Font                   = Enum.Font.GothamSemibold,
+		TextSize               = 11,
+		TextXAlignment         = Enum.TextXAlignment.Center,
+		Visible                = false,
+		ZIndex                 = 11,
+	})
+
+	local TabSubmitNormal = Color3.fromRGB(9, 99, 195)
+	local TabSubmitBtn = Create("TextButton", {
+		Parent           = LockFrame,
+		Size             = UDim2.new(0, 240, 0, 34),
+		AnchorPoint      = Vector2.new(0.5, 0),
+		Position         = UDim2.new(0.5, 0, 0, 195),
+		BackgroundColor3 = TabSubmitNormal,
+		BorderSizePixel  = 0,
+		Text             = "Unlock Tab",
+		TextColor3       = Color3.fromRGB(255, 255, 255),
+		Font             = Enum.Font.GothamBold,
+		TextSize         = 12,
+		AutoButtonColor  = false,
+		ZIndex           = 11,
+	}, {
+		Create("UICorner", { CornerRadius = UDim.new(0, 7) }),
+	})
+
+	local TabBusy = false
+	local function TabTrySubmit()
+		if TabBusy then return end
+		TabBusy = true
+		local typed = TabInputBox.Text
+		for _, k in ipairs(TabKeys) do
+			if typed == k then
+				-- Success
+				TabErrorLabel.Visible = false
+				TweenService:Create(TabInputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Color = Color3.fromRGB(0, 200, 100)}):Play()
+				TweenService:Create(TabSubmitBtn,   TweenInfo.new(0.3, Enum.EasingStyle.Quint), {BackgroundColor3 = Color3.fromRGB(0, 160, 80)}):Play()
+				TabSubmitBtn.Text = "✓  Unlocked"
+				OrionPlus.EnteredKey = typed
+				task.wait(0.4)
+				TweenService:Create(LockFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {BackgroundTransparency = 1}):Play()
+				task.wait(0.35)
+				LockFrame:Destroy()
+				OnUnlock(typed)
+				return
+			end
+		end
+		-- Fail
+		TabErrorLabel.Visible = true
+		TweenService:Create(TabInputStroke, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {Color = Color3.fromRGB(220, 55, 55)}):Play()
+		TweenService:Create(TabSubmitBtn,   TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = Color3.fromRGB(150, 35, 35)}):Play()
+		-- Shake
+		local base = TabInputCon.Position
+		for i = 1, 6 do
+			TweenService:Create(TabInputCon, TweenInfo.new(0.045, Enum.EasingStyle.Linear), {
+				Position = UDim2.new(base.X.Scale, base.X.Offset + ((i%2==0) and 6 or -6), base.Y.Scale, base.Y.Offset)
+			}):Play()
+			task.wait(0.045)
+		end
+		TabInputCon.Position = base
+		task.wait(0.8)
+		TweenService:Create(TabInputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {Color = Color3.fromRGB(60, 60, 60)}):Play()
+		TweenService:Create(TabSubmitBtn,   TweenInfo.new(0.3, Enum.EasingStyle.Quint), {BackgroundColor3 = TabSubmitNormal}):Play()
+		TabBusy = false
+	end
+
+	TabSubmitBtn.MouseButton1Up:Connect(function() spawn(TabTrySubmit) end)
+	TabInputBox.FocusLost:Connect(function(enter) if enter then spawn(TabTrySubmit) end end)
+	TabSubmitBtn.MouseEnter:Connect(function()
+		TweenService:Create(TabSubmitBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = Color3.fromRGB(20, 120, 220)}):Play()
+	end)
+	TabSubmitBtn.MouseLeave:Connect(function()
+		TweenService:Create(TabSubmitBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {BackgroundColor3 = TabSubmitNormal}):Play()
+	end)
+
+	return LockFrame
+end
+
 function OrionPlus:MakeWindow(WindowConfig)
 	local FirstTab  = true
 	local Minimized = false
@@ -499,18 +911,37 @@ function OrionPlus:MakeWindow(WindowConfig)
 	if WindowConfig.IntroEnabled == nil then
 		WindowConfig.IntroEnabled = true
 	end
-	WindowConfig.IntroText     = WindowConfig.IntroText     or "OrionPlus"
-	WindowConfig.CloseCallback = WindowConfig.CloseCallback or function() end
-	WindowConfig.ShowIcon      = WindowConfig.ShowIcon      or false
-	WindowConfig.Icon          = WindowConfig.Icon          or "rbxassetid://8834748103"
-	WindowConfig.IntroIcon     = WindowConfig.IntroIcon     or "rbxassetid://8834748103"
-	OrionPlus.Folder           = WindowConfig.ConfigFolder
-	OrionPlus.SaveCfg          = WindowConfig.SaveConfig
+	WindowConfig.IntroText        = WindowConfig.IntroText        or "OrionPlus"
+	WindowConfig.CloseCallback    = WindowConfig.CloseCallback    or function() end
+	WindowConfig.ShowIcon         = WindowConfig.ShowIcon         or false
+	WindowConfig.Icon             = WindowConfig.Icon             or "rbxassetid://8834748103"
+	WindowConfig.IntroIcon        = WindowConfig.IntroIcon        or "rbxassetid://8834748103"
+	-- Key system
+	WindowConfig.Keys             = WindowConfig.Keys             or nil   -- table of valid key strings, or nil to disable
+	WindowConfig.KeyTitle         = WindowConfig.KeyTitle         or "Authentication Required"
+	WindowConfig.KeyDescription   = WindowConfig.KeyDescription   or nil   -- auto-generated if nil
+	WindowConfig.KeyNote          = WindowConfig.KeyNote          or nil   -- small grey footer note
+	OrionPlus.Folder              = WindowConfig.ConfigFolder
+	OrionPlus.SaveCfg             = WindowConfig.SaveConfig
 
 	if WindowConfig.SaveConfig then
 		if not isfolder(WindowConfig.ConfigFolder) then
 			makefolder(WindowConfig.ConfigFolder)
 		end	
+	end
+
+	-- ── Global key gate ──────────────────────────────────────
+	-- If Keys are configured, block here until the user enters
+	-- a valid one.  Sets OrionPlus.EnteredKey on success.
+	if WindowConfig.Keys and #WindowConfig.Keys > 0 then
+		ShowKeyPrompt({
+			Keys        = WindowConfig.Keys,
+			Title       = WindowConfig.KeyTitle,
+			Description = WindowConfig.KeyDescription,
+			Note        = WindowConfig.KeyNote,
+		})
+	else
+		OrionPlus.Authenticated = true
 	end
 
 	local TabHolder = AddThemeObject(SetChildren(SetProps(MakeElement("ScrollFrame", Color3.fromRGB(255, 255, 255), 4), {
@@ -786,6 +1217,27 @@ function OrionPlus:MakeWindow(WindowConfig)
 		TabConfig.Name        = TabConfig.Name        or "Tab"
 		TabConfig.Icon        = TabConfig.Icon        or ""
 		TabConfig.PremiumOnly = TabConfig.PremiumOnly or false
+		TabConfig.Keys        = TabConfig.Keys        or nil  -- table of keys that unlock this tab
+
+		-- Determine if this tab is already unlocked at creation time.
+		-- A tab is unlocked when:
+		--   • It has no Keys requirement, OR
+		--   • The globally entered key (OrionPlus.EnteredKey) is in TabConfig.Keys
+		local TabUnlocked = (TabConfig.Keys == nil)
+		if not TabUnlocked and OrionPlus.EnteredKey then
+			for _, k in ipairs(TabConfig.Keys) do
+				if k == OrionPlus.EnteredKey then
+					TabUnlocked = true
+					break
+				end
+			end
+		end
+
+		-- Build the tab sidebar button.
+		-- If the tab needs a key, append a small lock badge next to the title.
+		local TitleText = TabConfig.Keys and not TabUnlocked
+			and (TabConfig.Name .. "  🔒")
+			or  TabConfig.Name
 
 		local TabFrame = SetChildren(SetProps(MakeElement("Button"), {
 			Size   = UDim2.new(1, 0, 0, 30),
@@ -798,7 +1250,7 @@ function OrionPlus:MakeWindow(WindowConfig)
 				ImageTransparency = 0.4,
 				Name              = "Ico"
 			}), "Text"),
-			AddThemeObject(SetProps(MakeElement("Label", TabConfig.Name, 14), {
+			AddThemeObject(SetProps(MakeElement("Label", TitleText, 14), {
 				Size             = UDim2.new(1, -35, 1, 0),
 				Position         = UDim2.new(0, 35, 0, 0),
 				Font             = Enum.Font.GothamSemibold,
@@ -826,15 +1278,54 @@ function OrionPlus:MakeWindow(WindowConfig)
 			Container.CanvasSize = UDim2.new(0, 0, 0, Container.UIListLayout.AbsoluteContentSize.Y + 30)
 		end)
 
+		-- Key-lock overlay (nil when the tab has no key requirement or is already unlocked)
+		local LockOverlay = nil
+		if TabConfig.Keys and not TabUnlocked then
+			-- Build a Frame with the same position/size as the container so it slots
+			-- in as another "ItemContainer"-named child and gets hidden on tab switches.
+			local LockHost = Create("Frame", {
+				Parent           = MainWindow,
+				Size             = UDim2.new(1, -150, 1, -50),
+				Position         = UDim2.new(0, 150, 0, 50),
+				BackgroundColor3 = Color3.fromRGB(22, 22, 22),
+				BorderSizePixel  = 0,
+				Visible          = false,
+				Name             = "ItemContainer",  -- same name → hidden by tab-switch loop
+			}, {
+				Create("UICorner", { CornerRadius = UDim.new(0, 0) }),
+			})
+
+			LockOverlay = LockHost
+
+			MakeTabKeyLock(LockHost, TabConfig.Keys, function(unlockedWith)
+				-- Called when the user enters the correct key.
+				-- Remove the lock badge from the tab label.
+				TabFrame.Title.Text = TabConfig.Name
+				TabUnlocked         = true
+				LockOverlay         = nil
+				-- Switch to the real container.
+				for _, ic in next, MainWindow:GetChildren() do
+					if ic.Name == "ItemContainer" then ic.Visible = false end
+				end
+				Container.Visible = true
+			end)
+		end
+
 		if FirstTab then
 			FirstTab = false
 			TabFrame.Ico.ImageTransparency  = 0
 			TabFrame.Title.TextTransparency = 0
 			TabFrame.Title.Font             = Enum.Font.GothamBlack
-			Container.Visible               = true
+			-- Only show the real container on first tab if it's unlocked
+			if TabUnlocked then
+				Container.Visible = true
+			elseif LockOverlay then
+				LockOverlay.Visible = true
+			end
 		end    
 
 		AddConnection(TabFrame.MouseButton1Click, function()
+			-- Dim all tab buttons
 			for _, Tab in next, TabHolder:GetChildren() do
 				if Tab:IsA("TextButton") then
 					Tab.Title.Font = Enum.Font.GothamSemibold
@@ -842,15 +1333,23 @@ function OrionPlus:MakeWindow(WindowConfig)
 					TweenService:Create(Tab.Title, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextTransparency  = 0.4}):Play()
 				end    
 			end
+			-- Hide all containers
 			for _, ItemContainer in next, MainWindow:GetChildren() do
 				if ItemContainer.Name == "ItemContainer" then
 					ItemContainer.Visible = false
 				end    
-			end  
+			end
+			-- Highlight this tab button
 			TweenService:Create(TabFrame.Ico,   TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageTransparency = 0}):Play()
 			TweenService:Create(TabFrame.Title, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextTransparency  = 0}):Play()
 			TabFrame.Title.Font = Enum.Font.GothamBlack
-			Container.Visible   = true   
+
+			-- Show content: real container if unlocked, lock overlay otherwise
+			if TabUnlocked then
+				Container.Visible = true
+			elseif LockOverlay and LockOverlay.Parent then
+				LockOverlay.Visible = true
+			end
 		end)
 
 		local function GetElements(ItemParent)
