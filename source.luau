@@ -502,7 +502,7 @@ local function ShowKeyPrompt(KeyConfig)
 		Parent                 = Orion,
 		Size                   = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3       = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.45,
+		BackgroundTransparency = 1,
 		BorderSizePixel        = 0,
 		ZIndex                 = 50,
 	})
