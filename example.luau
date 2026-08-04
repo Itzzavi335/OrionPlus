@@ -38,33 +38,26 @@ OrionPlus = loadstring(game:HttpGet("https://raw.githubusercontent.com/Itzzavi33
 
 -- Example A: no key gate
 local Window = OrionPlus:MakeWindow({
-    Name         = "My Script",
-    IntroEnabled = true,
-    IntroText    = "My Script",
-})
-
--- Example B: single key
-local Window = OrionPlus:MakeWindow({
-    Name        = "My Script",
-    Keys        = { "MYSCRIPT-2024-ALPHA" },
-    KeyTitle    = "Enter Key",
-    KeyNote     = "Get your key at discord.gg/example",
-})
-
--- Example C: multiple keys (each user gets their own)
-local Window = OrionPlus:MakeWindow({
-    Name           = "My Script",
-    IntroEnabled   = true,
-    IntroText      = "My Script",
+    Name          = "My Script",
+    HidePremium   = false,
+    IntroEnabled  = true,
+    IntroText     = "My Script",
+    IntroIcon     = "rbxassetid://...",
+    ShowIcon      = true,
+    Icon          = "rbxassetid://...",
+    SaveConfig    = true,
+    ConfigFolder  = "MyScriptConfigs",
+    CloseCallback = function()
+        print("UI closed")
+    end,
     Keys           = {
         "USER-KEY-ALPHA-001",
         "USER-KEY-BETA-002",
-        "USER-KEY-GAMMA-003",
         "ADMIN-OVERRIDE-9999",
     },
     KeyTitle       = "Authentication",
-    KeyDescription = "Enter your personal key to access the script.",
-    KeyNote        = "Purchase a key at discord.gg/example",
+    KeyDescription = "Enter your key below.",
+    KeyNote        = "Keys at discord.gg/xyz",
 })
 
 -- After this line, the main UI builds.  Use OrionPlus.EnteredKey to tell
