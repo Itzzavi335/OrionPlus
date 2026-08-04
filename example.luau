@@ -1,137 +1,173 @@
 OrionPlus = loadstring(game:HttpGet("https://raw.githubusercontent.com/Itzzavi335/OrionPlus/refs/heads/main/source.luau"))()
 
 -- ════════════════════════════════════════════════════════════
--- 1. MAKE WINDOW
+-- 1. MAKE WINDOW  (with global key system)
 -- ════════════════════════════════════════════════════════════
 --[[
     OrionPlus:MakeWindow({
-        Name          = string,     -- Title shown at the top.         Default: "OrionPlus"
-        IntroEnabled  = boolean,    -- Show the intro animation.       Default: true
-        IntroText     = string,     -- Text during intro.              Default: "OrionPlus"
-        IntroIcon     = string,     -- Roblox asset ID for intro icon. Default: built-in
-        Icon          = string,     -- Asset ID shown next to title.   Default: built-in
-        ShowIcon      = boolean,    -- Show the icon next to title.    Default: false
-        HidePremium   = boolean,    -- Hide the premium label.         Default: false
-        SaveConfig    = boolean,    -- Auto-save / auto-load flags.    Default: false
-        ConfigFolder  = string,     -- Folder name for saved configs.  Default: Window name
-        CloseCallback = function,   -- Called when the X is pressed.   Default: function()end
+        -- Standard options
+        Name          = string,
+        IntroEnabled  = boolean,
+        IntroText     = string,
+        IntroIcon     = string,
+        Icon          = string,
+        ShowIcon      = boolean,
+        HidePremium   = boolean,
+        SaveConfig    = boolean,
+        ConfigFolder  = string,
+        CloseCallback = function,
+
+        -- ── Key system ────────────────────────────────────────
+        Keys           = {string, ...},  -- list of valid keys; ANY one grants access
+                                         -- nil / omit = no key gate
+        KeyTitle       = string,         -- modal heading.       Default: "Authentication Required"
+        KeyDescription = string,         -- modal body text.     Default: auto ("X key(s) accepted")
+        KeyNote        = string,         -- tiny grey footer.    Default: nil
     })
-    Returns: TabFunction (use :MakeTab on it)
+
+    HOW IT WORKS:
+      • When Keys is provided, a full-screen themed modal appears BEFORE
+        the main window is built.  The script blocks until the user types
+        a matching key and presses "Confirm Key" (or Enter).
+      • Wrong key  → red shake animation + error message.
+      • Correct key → green flash, modal fades out, window builds normally.
+      • OrionPlus.EnteredKey holds whichever key the user typed.
+      • OrionPlus.Authenticated = true once the gate is passed.
+      • Multiple keys = multiple users can each have their own unique key.
 ]]
 
+-- Example A: no key gate
 local Window = OrionPlus:MakeWindow({
-    Name          = "My Script",
-    IntroEnabled  = true,
-    IntroText     = "My Script",
-    IntroIcon     = "rbxassetid://8834748103",
-    Icon          = "rbxassetid://8834748103",
-    ShowIcon      = true,
-    HidePremium   = false,
-    SaveConfig    = true,
-    ConfigFolder  = "MyScriptConfig",
-    CloseCallback = function()
-        print("UI was closed!")
-    end,
+    Name         = "My Script",
+    IntroEnabled = true,
+    IntroText    = "My Script",
 })
 
+-- Example B: single key
+local Window = OrionPlus:MakeWindow({
+    Name        = "My Script",
+    Keys        = { "MYSCRIPT-2024-ALPHA" },
+    KeyTitle    = "Enter Key",
+    KeyNote     = "Get your key at discord.gg/example",
+})
+
+-- Example C: multiple keys (each user gets their own)
+local Window = OrionPlus:MakeWindow({
+    Name           = "My Script",
+    IntroEnabled   = true,
+    IntroText      = "My Script",
+    Keys           = {
+        "USER-KEY-ALPHA-001",
+        "USER-KEY-BETA-002",
+        "USER-KEY-GAMMA-003",
+        "ADMIN-OVERRIDE-9999",
+    },
+    KeyTitle       = "Authentication",
+    KeyDescription = "Enter your personal key to access the script.",
+    KeyNote        = "Purchase a key at discord.gg/example",
+})
+
+-- After this line, the main UI builds.  Use OrionPlus.EnteredKey to tell
+-- which key the user entered (e.g. to grant different tier access).
+print("User key:", OrionPlus.EnteredKey)
+
 -- ════════════════════════════════════════════════════════════
--- 2. MAKE TAB
+-- 2. MAKE TAB  (with optional per-tab key requirement)
 -- ════════════════════════════════════════════════════════════
 --[[
     Window:MakeTab({
-        Name        = string,    -- Tab label.               Default: "Tab"
-        Icon        = string,    -- Feather icon name OR asset ID. Default: ""
-        PremiumOnly = boolean,   -- Locks tab to premium.   Default: false
-    })
-    Returns: ElementFunction (add elements to the tab)
+        Name        = string,
+        Icon        = string,
+        PremiumOnly = boolean,   -- hardcoded lock (no key entry)
 
-    Feather icon names: "home", "settings", "user", "star", "zap",
-    "shield", "lock", "eye", "compass", "activity", etc.
-    Full list: https://github.com/evoincorp/lucideblox
+        -- ── Per-tab key system ────────────────────────────────
+        Keys = {string, ...},    -- table of keys that unlock THIS tab
+                                 -- nil / omit = tab is always accessible
+    })
+
+    HOW IT WORKS:
+      • If OrionPlus.EnteredKey (from the global gate) is already in the
+        tab's Keys list, the tab unlocks immediately — no extra prompt.
+      • If the entered global key is NOT in the tab's list, the tab shows
+        🔒 in the sidebar and an inline key-entry overlay instead of
+        its content.  The user types the correct key inside the tab area
+        and it unlocks for the rest of the session.
+      • This lets you have:
+          – A free tier: tabs with no Keys.
+          – A paid tier: tabs whose Keys list only contains premium keys.
+          – Admin-only tabs: tabs whose Keys list is just one secret key.
+      • PremiumOnly = true is the old hardcoded lock (no key entry at all).
+        Keys-based locking is the new flexible version.
 ]]
 
+-- Normal tab (always accessible)
 local MainTab = Window:MakeTab({
     Name = "Main",
     Icon = "rbxassetid://4483345875",
 })
 
-local SettingsTab = Window:MakeTab({
-    Name = "Settings",
-    Icon = "rbxassetid://3610239960",
-})
-
+-- Tab locked to a specific subset of keys
+-- Users who entered "USER-KEY-ALPHA-001" or "ADMIN-OVERRIDE-9999"
+-- at the global gate get in automatically.  Anyone else sees the
+-- inline key prompt when they click the tab.
 local PremiumTab = Window:MakeTab({
-    Name        = "VIP",
-    Icon        = "rbxassetid://4483345875",
-    PremiumOnly = true,   -- shows a locked message instead of elements
+    Name = "Premium",
+    Icon = "rbxassetid://3610239960",
+    Keys = { "USER-KEY-ALPHA-001", "ADMIN-OVERRIDE-9999" },
+})
+
+-- Admin-only tab — only the admin override key works
+local AdminTab = Window:MakeTab({
+    Name = "Admin",
+    Icon = "rbxassetid://3944703587",
+    Keys = { "ADMIN-OVERRIDE-9999" },
+})
+
+-- Hardcoded locked (PremiumOnly — old style, no key entry prompt)
+local HardLockTab = Window:MakeTab({
+    Name        = "Locked",
+    PremiumOnly = true,
 })
 
 -- ════════════════════════════════════════════════════════════
--- 3. SECTION  (groups elements under a heading)
+-- 3. SECTION
 -- ════════════════════════════════════════════════════════════
---[[
-    Tab:AddSection({ Name = string })
-    Returns: SectionFunction (same API as the tab — add elements inside)
-]]
-
 local CombatSection = MainTab:AddSection({ Name = "Combat" })
 
 -- ════════════════════════════════════════════════════════════
--- 4. LABEL  (static read-only text row)
+-- 4. LABEL
 -- ════════════════════════════════════════════════════════════
---[[
-    Tab/Section:AddLabel(text: string)
-    Returns: LabelFunction
-        :Set(text: string)   — update the label text at runtime
-]]
-
 local MyLabel = MainTab:AddLabel("This is a label")
 MyLabel:Set("Label updated!")
 
 -- ════════════════════════════════════════════════════════════
--- 5. PARAGRAPH  (title + wrapped body text)
+-- 5. PARAGRAPH
 -- ════════════════════════════════════════════════════════════
---[[
-    Tab/Section:AddParagraph(title: string, content: string)
-    Returns: ParagraphFunction
-        :Set(content: string)  — update body text at runtime
-]]
-
-local MyParagraph = MainTab:AddParagraph(
-    "About",
-    "This script does awesome things. Drag the window by its top bar on any device."
-)
-MyParagraph:Set("Updated body text here.")
+local MyParagraph = MainTab:AddParagraph("About", "OrionPlus loaded successfully.")
+MyParagraph:Set("Updated body text.")
 
 -- ════════════════════════════════════════════════════════════
 -- 6. BUTTON
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddButton({
-        Name     = string,    -- Button label.  Default: "Button"
-        Callback = function,  -- Fires on click.
-        Icon     = string,    -- Asset ID for right-side icon. Default: built-in
+        Name     = string,
+        Callback = function,
+        Icon     = string,   -- asset ID, right side
     })
     Returns: ButtonObject
-        :Set(text: string)   — change the button label at runtime
+        :Set(text)
 ]]
-
 local MyButton = MainTab:AddButton({
     Name     = "Teleport",
-    Callback = function()
-        print("Button pressed!")
-    end,
-    Icon = "rbxassetid://3944703587",
+    Callback = function()  print("Button pressed!")  end,
+    Icon     = "rbxassetid://3944703587",
 })
-
 MyButton:Set("Teleport (updated)")
 
--- Can also add inside a section:
 CombatSection:AddButton({
     Name     = "Kill Aura",
-    Callback = function()
-        print("Kill Aura activated")
-    end,
+    Callback = function()  print("Kill Aura activated")  end,
 })
 
 -- ════════════════════════════════════════════════════════════
@@ -139,56 +175,44 @@ CombatSection:AddButton({
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddToggle({
-        Name     = string,    -- Label.                     Default: "Toggle"
-        Default  = boolean,   -- Starting state.            Default: false
-        Color    = Color3,    -- Checkbox accent color.     Default: blue
-        Flag     = string,    -- Key in OrionPlus.Flags.    Default: nil
-        Save     = boolean,   -- Include in saved config.   Default: false
+        Name     = string,
+        Default  = boolean,     -- Default: false
+        Color    = Color3,      -- Checkbox accent.  Default: blue
+        Flag     = string,
+        Save     = boolean,
         Callback = function(value: boolean),
     })
-    Returns: ToggleObject
-        .Value               — current boolean value
-        :Set(value: boolean) — change state programmatically
+    Returns: ToggleObject   .Value   :Set(bool)
 ]]
-
 local SpeedToggle = MainTab:AddToggle({
     Name     = "Speed Hack",
     Default  = false,
     Color    = Color3.fromRGB(0, 170, 255),
     Flag     = "SpeedEnabled",
     Save     = true,
-    Callback = function(value)
-        print("Speed hack:", value)
-    end,
+    Callback = function(v)  print("Speed:", v)  end,
 })
-
-SpeedToggle:Set(true)              -- turn on programmatically
-print(SpeedToggle.Value)           -- read current value
-print(OrionPlus.Flags["SpeedEnabled"].Value)  -- access via Flag key
+SpeedToggle:Set(true)
+print(SpeedToggle.Value)
 
 -- ════════════════════════════════════════════════════════════
--- 8. SLIDER
+-- 8. SLIDER  (mobile touch supported)
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddSlider({
-        Name      = string,    -- Label.                    Default: "Slider"
-        Min       = number,    -- Minimum value.            Default: 0
-        Max       = number,    -- Maximum value.            Default: 100
-        Increment = number,    -- Step size.                Default: 1
-        Default   = number,    -- Starting value.           Default: 50
-        ValueName = string,    -- Unit label (e.g. "ms").   Default: ""
-        Color     = Color3,    -- Fill color.               Default: green
-        Flag      = string,    -- Key in OrionPlus.Flags.   Default: nil
-        Save      = boolean,   -- Include in saved config.  Default: false
+        Name      = string,
+        Min       = number,     -- Default: 0
+        Max       = number,     -- Default: 100
+        Increment = number,     -- Default: 1
+        Default   = number,     -- Default: 50
+        ValueName = string,     -- Unit label (e.g. "ms")
+        Color     = Color3,
+        Flag      = string,
+        Save      = boolean,
         Callback  = function(value: number),
     })
-    Returns: SliderObject
-        .Value            — current number value
-        :Set(value: number)
-    
-    MOBILE: Drag with finger — fully supported.
+    Returns: SliderObject   .Value   :Set(number)
 ]]
-
 local SpeedSlider = MainTab:AddSlider({
     Name      = "Walk Speed",
     Min       = 16,
@@ -199,214 +223,174 @@ local SpeedSlider = MainTab:AddSlider({
     Color     = Color3.fromRGB(0, 200, 100),
     Flag      = "WalkSpeed",
     Save      = true,
-    Callback  = function(value)
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
+    Callback  = function(v)
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v
     end,
 })
-
 SpeedSlider:Set(100)
-print(SpeedSlider.Value)
 
 -- ════════════════════════════════════════════════════════════
 -- 9. DROPDOWN
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddDropdown({
-        Name     = string,          -- Label.                   Default: "Dropdown"
-        Options  = {string, ...},   -- List of choices.         Default: {}
-        Default  = string,          -- Pre-selected option.     Default: ""
-        Flag     = string,          -- Key in OrionPlus.Flags.  Default: nil
-        Save     = boolean,         -- Include in saved config. Default: false
+        Name     = string,
+        Options  = {string, ...},
+        Default  = string,
+        Flag     = string,
+        Save     = boolean,
         Callback = function(value: string),
     })
     Returns: DropdownObject
-        .Value              — currently selected string
-        :Set(value: string)
-        :Refresh(options: {string}, delete: boolean)
-            delete = true  clears existing buttons before adding new ones
+        .Value
+        :Set(string)
+        :Refresh(options, deleteOld: boolean)
 ]]
-
-local TeamDropdown = MainTab:AddDropdown({
+local TeamDrop = MainTab:AddDropdown({
     Name     = "Select Team",
-    Options  = {"Red", "Blue", "Green", "Yellow"},
+    Options  = {"Red", "Blue", "Green"},
     Default  = "Red",
-    Flag     = "SelectedTeam",
+    Flag     = "Team",
     Save     = true,
-    Callback = function(value)
-        print("Team selected:", value)
-    end,
+    Callback = function(v)  print("Team:", v)  end,
 })
-
-TeamDropdown:Set("Blue")                          -- select programmatically
-TeamDropdown:Refresh({"Alpha","Beta","Gamma"}, true)  -- replace all options
-print(TeamDropdown.Value)
+TeamDrop:Set("Blue")
+TeamDrop:Refresh({"Alpha","Beta","Gamma"}, true)
 
 -- ════════════════════════════════════════════════════════════
--- 10. BIND  (keybind picker)
+-- 10. BIND
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddBind({
-        Name     = string,       -- Label.                   Default: "Bind"
-        Default  = Enum.KeyCode, -- Starting key.            Default: Unknown
-        Hold     = boolean,      -- Fire on hold/release too. Default: false
-        Flag     = string,       -- Key in OrionPlus.Flags.  Default: nil
-        Save     = boolean,      -- Include in saved config. Default: false
-        Callback = function()    -- Called on keypress.
-                                 -- If Hold=true: Callback(isHolding: boolean)
+        Name     = string,
+        Default  = Enum.KeyCode,
+        Hold     = boolean,     -- fires Callback(true/false) on press/release
+        Flag     = string,
+        Save     = boolean,
+        Callback = function() / function(holding: boolean),
     })
-    Returns: BindObject
-        .Value          — current key name string
-        :Set(key)       — set key (Enum.KeyCode or Enum.UserInputType)
-
-    Usage:
-      Click the bind box → it waits for your next input → saves that key.
-      Blacklisted (cannot bind): W A S D arrows Tab Backspace Escape
-      Allowed mouse buttons: Mouse1 Mouse2 Mouse3
+    Returns: BindObject   .Value (key name string)   :Set(key)
+    Click bind box → waits for next input → stores it.
+    Blacklisted: WASD, arrows, Tab, Backspace, Escape.
+    Mouse buttons 1–3 are allowed.
 ]]
-
-local FlyBind = SettingsTab:AddBind({
+local FlyBind = PremiumTab:AddBind({
     Name     = "Fly Toggle",
     Default  = Enum.KeyCode.F,
     Hold     = false,
     Flag     = "FlyKey",
     Save     = true,
-    Callback = function()
-        print("Fly key pressed!")
-    end,
+    Callback = function()  print("Fly!")  end,
 })
-
-local SprintBind = SettingsTab:AddBind({
-    Name     = "Sprint (hold)",
-    Default  = Enum.KeyCode.LeftShift,
-    Hold     = true,           -- callback fires with true on press, false on release
-    Callback = function(holding)
-        print("Sprint:", holding)
-    end,
-})
-
-FlyBind:Set(Enum.KeyCode.G)   -- change key programmatically
-print(FlyBind.Value)          -- "G"
+FlyBind:Set(Enum.KeyCode.G)
 
 -- ════════════════════════════════════════════════════════════
 -- 11. TEXTBOX
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddTextbox({
-        Name          = string,   -- Label.                      Default: "Textbox"
-        Default       = string,   -- Pre-filled text.            Default: ""
-        TextDisappear = boolean,  -- Clear text after unfocus.   Default: false
-        Callback      = function(text: string),  -- fires on FocusLost
+        Name          = string,
+        Default       = string,
+        TextDisappear = boolean,   -- clear after FocusLost
+        Callback      = function(text: string),
     })
-    (No return object with extra methods.)
 ]]
-
-SettingsTab:AddTextbox({
+PremiumTab:AddTextbox({
     Name          = "Player Name",
-    Default       = "Player1",
-    TextDisappear = false,
-    Callback      = function(text)
-        print("Entered:", text)
-    end,
-})
-
-SettingsTab:AddTextbox({
-    Name          = "Execute Command",
     Default       = "",
-    TextDisappear = true,   -- clears after each submit
-    Callback      = function(text)
-        print("Command:", text)
-    end,
+    TextDisappear = false,
+    Callback      = function(t)  print("Entered:", t)  end,
 })
 
 -- ════════════════════════════════════════════════════════════
--- 12. COLORPICKER
+-- 12. COLORPICKER  (mobile touch supported)
 -- ════════════════════════════════════════════════════════════
 --[[
     Tab/Section:AddColorpicker({
-        Name     = string,    -- Label.                   Default: "Colorpicker"
-        Default  = Color3,    -- Starting color.          Default: white
-        Flag     = string,    -- Key in OrionPlus.Flags.  Default: nil
-        Save     = boolean,   -- Include in saved config. Default: false
+        Name     = string,
+        Default  = Color3,
+        Flag     = string,
+        Save     = boolean,
         Callback = function(color: Color3),
     })
-    Returns: ColorpickerObject
-        .Value           — current Color3
-        :Set(Color3)     — set color programmatically
-
-    Click the color box to expand the picker.
-    MOBILE: Drag the color/hue panels with your finger — fully supported.
+    Returns: ColorpickerObject   .Value   :Set(Color3)
+    Click color box to expand.  Drag panels with mouse OR finger.
 ]]
-
-local TrailColor = SettingsTab:AddColorpicker({
+local TrailColor = PremiumTab:AddColorpicker({
     Name     = "Trail Color",
     Default  = Color3.fromRGB(255, 0, 128),
     Flag     = "TrailColor",
     Save     = true,
-    Callback = function(color)
-        print("Color:", color)
-    end,
+    Callback = function(c)  print("Color:", c)  end,
 })
-
 TrailColor:Set(Color3.fromRGB(0, 255, 100))
-print(TrailColor.Value)
 
 -- ════════════════════════════════════════════════════════════
 -- 13. NOTIFICATION
 -- ════════════════════════════════════════════════════════════
 --[[
     OrionPlus:MakeNotification({
-        Name    = string,    -- Bold title.                  Default: "Notification"
-        Content = string,    -- Body text.                   Default: "Test"
-        Image   = string,    -- Asset ID for left icon.      Default: built-in
-        Time    = number,    -- Seconds before it fades.     Default: 15
+        Name    = string,   -- bold title
+        Content = string,   -- body
+        Image   = string,   -- asset ID
+        Time    = number,   -- seconds before fade
     })
-    Notifications appear in the bottom-right corner.
-    They animate in and then auto-fade.
 ]]
-
 OrionPlus:MakeNotification({
     Name    = "Script Loaded",
-    Content = "OrionPlus loaded successfully. Drag the window to reposition.",
-    Image   = "rbxassetid://4384403532",
-    Time    = 6,
+    Content = "OrionPlus ready.",
+    Time    = 5,
 })
 
 -- ════════════════════════════════════════════════════════════
--- 14. INIT (load saved config on startup)
+-- 14. INIT  (load saved config)
 -- ════════════════════════════════════════════════════════════
---[[
-    OrionPlus:Init()
-    Call AFTER all windows/tabs/elements are created and SaveConfig = true.
-    It reads the saved .txt file for the current game ID and restores flags.
-]]
-
+-- Call AFTER all elements are created when SaveConfig = true.
 OrionPlus:Init()
 
 -- ════════════════════════════════════════════════════════════
 -- 15. DESTROY
 -- ════════════════════════════════════════════════════════════
---[[
-    OrionPlus:Destroy()
-    Removes the entire ScreenGui and disconnects all connections.
-]]
-
--- OrionPlus:Destroy()   -- uncomment to tear down the UI
+-- OrionPlus:Destroy()
 
 -- ════════════════════════════════════════════════════════════
--- 16. FLAGS  (global state table)
+-- 16. KEY SYSTEM — QUICK REFERENCE
 -- ════════════════════════════════════════════════════════════
 --[[
-    Any element created with a Flag = "key" is accessible at:
-        OrionPlus.Flags["key"]        — the element object
-        OrionPlus.Flags["key"].Value  — the current value
-        OrionPlus.Flags["key"]:Set(v) — programmatic setter
+    ┌─────────────────────────────────────────────────────────┐
+    │  GLOBAL key gate  (MakeWindow)                          │
+    │  Keys = { "k1", "k2", ... }                             │
+    │  → ANY one key in the list unlocks the whole UI.        │
+    │  → Modal blocks until a valid key is typed.             │
+    │  → OrionPlus.EnteredKey  = the key the user typed.      │
+    │  → OrionPlus.Authenticated = true after passing.        │
+    ├─────────────────────────────────────────────────────────┤
+    │  PER-TAB key gate  (MakeTab)                            │
+    │  Keys = { "k1", "k2", ... }                             │
+    │  → Tab shows 🔒 in sidebar until a valid key is entered.│
+    │  → If OrionPlus.EnteredKey is already in the list,      │
+    │    the tab unlocks automatically (no extra prompt).     │
+    │  → Wrong key → red shake + error inside the tab area.   │
+    │  → Correct key → overlay fades, real content appears.   │
+    ├─────────────────────────────────────────────────────────┤
+    │  Tier example:                                          │
+    │    Global Keys = { freeKey, premiumKey, adminKey }      │
+    │    MainTab   → no Keys (everyone sees it)               │
+    │    VIPTab    → Keys = { premiumKey, adminKey }          │
+    │    AdminTab  → Keys = { adminKey }                      │
+    │  A free user passes the gate with freeKey but sees      │
+    │  🔒 on VIPTab and AdminTab.  A premium user auto-        │
+    │  unlocks VIPTab.  Admin auto-unlocks both.              │
+    └─────────────────────────────────────────────────────────┘
 
-    Example:
+    FLAGS access (works the same as before):
+        OrionPlus.Flags["FlagName"].Value
+        OrionPlus.Flags["FlagName"]:Set(v)
 ]]
 
--- Later in your code, after the UI is built:
-task.wait(2)
-print("Current speed:", OrionPlus.Flags["WalkSpeed"].Value)
-print("Speed enabled:", OrionPlus.Flags["SpeedEnabled"].Value)
-print("Team:", OrionPlus.Flags["SelectedTeam"].Value)
-OrionPlus.Flags["WalkSpeed"]:Set(200)
+-- After UI is built, you can inspect EnteredKey to branch logic:
+if OrionPlus.EnteredKey == "ADMIN-OVERRIDE-9999" then
+    print("Admin user detected — granting extra access")
+elseif OrionPlus.EnteredKey then
+    print("Standard user:", OrionPlus.EnteredKey)
+end
